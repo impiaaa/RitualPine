@@ -5,6 +5,7 @@ using System.Linq;
 
 public class Drawer : MonoBehaviour {
 	public float distanceThreshold = 0.1f;
+    public float circleThreshold = 2.0f;
     public Transform glowPrefab;
 
 	Vector2 startingPoint;
@@ -61,7 +62,7 @@ public class Drawer : MonoBehaviour {
 			for (int j = i+1; j < directions.Count; j++) {
 				float meanFirst, stddevFirst, meanSecond, stddevSecond, meanThird, stddevThird;
 				MeanAndStdDev(directions.GetRange(0, i), out meanFirst, out stddevFirst);
-				MeanAndStdDev(directions.GetRange(i, j-i+1), out meanSecond, out stddevSecond);
+				MeanAndStdDev(directions.GetRange(i, j-i), out meanSecond, out stddevSecond);
 				MeanAndStdDev(directions.GetRange(j, directions.Count-j), out meanThird, out stddevThird);
 				float sumStddev = stddevFirst+stddevSecond+stddevThird;
 				if (minStdDevSum == -1 || sumStddev < minStdDevSum) {
@@ -94,11 +95,86 @@ public class Drawer : MonoBehaviour {
 			useBins--;
 			minSplitSecond = directions.Count;
 		}
-		if (useBins >= 1) print("0.."+(minSplitFirst-1)+" ("+bestMeanFirst+" "+bestStddevFirst+")");
+        if (useBins >= 1) MeanAndStdDev(directions.GetRange(0, minSplitFirst), out bestMeanFirst, out bestStddevFirst);
+        if (useBins >= 2) MeanAndStdDev(directions.GetRange(minSplitFirst, minSplitSecond - minSplitFirst), out bestMeanSecond, out bestStddevSecond);
+        if (useBins >= 3) MeanAndStdDev(directions.GetRange(minSplitSecond, directions.Count - minSplitSecond), out bestMeanThird, out bestStddevThird);
+        if (useBins >= 1) print("0.."+(minSplitFirst-1)+" ("+bestMeanFirst+" "+bestStddevFirst+")");
 		if (useBins >= 2) print(minSplitFirst+".."+(minSplitSecond-1)+" ("+bestMeanSecond+" "+bestStddevSecond+")");
 		if (useBins >= 3) print(minSplitSecond+".."+(directions.Count-1)+" ("+bestMeanThird+" "+bestStddevThird+")");
 
-		if (bestMeanFirst > 135 || bestMeanFirst < -135) {
+        if (useBins == 2 && Mathf.Abs(bestMeanFirst - 135) < 45 && Mathf.Abs(bestMeanSecond - 45) < 45)
+        {
+            print("<");
+        }
+        else if (useBins == 2 && Mathf.Abs(bestMeanFirst - -135) < 45 && Mathf.Abs(bestMeanSecond - -45) < 45)
+        {
+            print("<");
+        }
+        else if (useBins == 2 && Mathf.Abs(bestMeanFirst - 45) < 45 && Mathf.Abs(bestMeanSecond - 135) < 45)
+        {
+            print(">");
+        }
+        else if (useBins == 2 && Mathf.Abs(bestMeanFirst - -45) < 45 && Mathf.Abs(bestMeanSecond - -135) < 45)
+        {
+            print(">");
+        }
+        else if (useBins == 2 && Mathf.Abs(bestMeanFirst - -45) < 45 && Mathf.Abs(bestMeanSecond - 45) < 45)
+        {
+            print("v");
+        }
+        else if (useBins == 2 && Mathf.Abs(bestMeanFirst - -135) < 45 && Mathf.Abs(bestMeanSecond - 135) < 45)
+        {
+            print("v");
+        }
+        else if (useBins == 2 && Mathf.Abs(bestMeanFirst - 45) < 45 && Mathf.Abs(bestMeanSecond - -45) < 45)
+        {
+            print("^");
+        }
+        else if (useBins == 2 && Mathf.Abs(bestMeanFirst - 135) < 45 && Mathf.Abs(bestMeanSecond - -135) < 45)
+        {
+            print("^");
+        }
+        else if (Vector2.Distance(endingPoint, startingPoint) < circleThreshold && (useBins > 1 || bestStddevFirst > 50) && directions.Count > 4)
+        {
+            print("O");
+        }
+        else if (useBins == 3 && Mathf.Abs(bestMeanFirst - 135) < 45 && Mathf.Abs(bestMeanThird - 45) < 45)
+        {
+            print("<");
+        }
+        else if (useBins == 3 && Mathf.Abs(bestMeanFirst - -135) < 45 && Mathf.Abs(bestMeanThird - -45) < 45)
+        {
+            print("<");
+        }
+        else if (useBins == 3 && Mathf.Abs(bestMeanFirst - 45) < 45 && Mathf.Abs(bestMeanThird - 135) < 45)
+        {
+            print(">");
+        }
+        else if (useBins == 3 && Mathf.Abs(bestMeanFirst - -45) < 45 && Mathf.Abs(bestMeanThird - -135) < 45)
+        {
+            print(">");
+        }
+        else if (useBins == 3 && Mathf.Abs(bestMeanFirst - -45) < 45 && Mathf.Abs(bestMeanThird - 45) < 45)
+        {
+            print("v");
+        }
+        else if (useBins == 3 && Mathf.Abs(bestMeanFirst - -135) < 45 && Mathf.Abs(bestMeanThird - 135) < 45)
+        {
+            print("v");
+        }
+        else if (useBins == 3 && Mathf.Abs(bestMeanFirst - 45) < 45 && Mathf.Abs(bestMeanThird - -45) < 45)
+        {
+            print("^");
+        }
+        else if (useBins == 3 && Mathf.Abs(bestMeanFirst - 135) < 45 && Mathf.Abs(bestMeanThird - -135) < 45)
+        {
+            print("^");
+        }
+        else if (useBins == 3 && Mathf.Abs(bestMeanFirst - bestMeanThird) < 45)
+        {
+            print("Z");
+        }
+        else if (bestMeanFirst > 135 || bestMeanFirst < -135) {
 			print("-");
 		}
 		else if (bestMeanFirst < 45 && bestMeanFirst > -45) {
