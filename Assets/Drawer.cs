@@ -6,54 +6,58 @@ using System.Linq;
 public class Drawer : MonoBehaviour {
 	public float distanceThreshold = 0.1f;
     public float circleThreshold = 2.0f;
-    public Transform glowPrefab;
 
 	Vector2 startingPoint;
 	Vector2 endingPoint;
-	List<Transform> objects;
+    List<Vector2> points;
 	List<float> directions;
 
 	// Use this for initialization
 	void Start () {
-		objects = new List<Transform> ();
+		points = new List<Vector2> ();
 		directions = new List<float>();
 	}
 	
 	// Update is called once per frame
 	void Update () {
         Vector2 point = Camera.main.ScreenToWorldPoint(Input.mousePosition);
-        if (Input.GetMouseButtonDown (0)) {
+        bool overlap = GetComponent<Collider2D>().OverlapPoint(point);
+        if (overlap && Input.GetMouseButtonDown (0)) {
 			startingPoint = point;
 		}
-		if (Input.GetMouseButton (0)) {
-			float distance = 10000;
-			if (objects.Count != 0) {
-				distance = Vector2.Distance(point, objects[objects.Count - 1].position);
+        Transform child = transform.GetChild(0);
+        var em = child.GetComponent<ParticleSystem>().emission;
+        if (overlap && Input.GetMouseButton (0)) {
+            em.enabled = true;
+            child.localPosition = point;
+            float distance = 10000;
+			if (points.Count != 0) {
+				distance = Vector2.Distance(point, points[points.Count - 1]);
 			}
-			if (objects.Count == 0 || distance > distanceThreshold) {
-				Transform newObj = (Transform)Instantiate(glowPrefab, point, Quaternion.identity);
-				if (objects.Count >= 2) {
-					Transform last = objects[objects.Count - 1];
-					float angle = Mathf.Rad2Deg * Mathf.Atan2(point.y-last.position.y, point.x-last.position.x);
-//					newObj.rotation = Quaternion.Euler(new Vector3(0, 0, angle));
+			if (points.Count == 0 || distance > distanceThreshold) {
+				if (points.Count >= 2) {
+					Vector2 last = points[points.Count - 1];
+					float angle = Mathf.Rad2Deg * Mathf.Atan2(point.y-last.y, point.x-last.x);
 					directions.Add(angle);
 				}
-				objects.Add(newObj);
+                points.Add(point);
 			}
 		}
-		if (Input.GetMouseButtonUp (0)) {
-			endingPoint = point;
-			char symbol = Recognize();
+        else if (child.gameObject.activeInHierarchy)
+        {
+            child.GetComponent<TrailRenderer>().Clear();
+            em.enabled = false;
+        }
+		if (Input.GetMouseButtonUp (0) || (!overlap && points.Count > 0)) {
+            endingPoint = point;
+            char symbol = Recognize();
             SendMessageUpwards("SubmitStroke", symbol);
-			foreach (Transform t in objects) {
-				GameObject.Destroy(t.gameObject);
-			}
-			objects.Clear();
-			directions.Clear();
-		}
-	}
+            points.Clear();
+            directions.Clear();
+        }
+    }
 
-	char Recognize() {
+    char Recognize() {
 		// Split into 3 sections, minimizing std. dev. across them
 		int minSplitFirst = -1, minSplitSecond = -1;
 		float minStdDevSum = -1;
