@@ -1,6 +1,7 @@
 ﻿using UnityEngine;
 using System.Collections.Generic;
 using FableLabs.Anim;
+using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using System;
 using Random = UnityEngine.Random;
@@ -231,8 +232,8 @@ public class AI
 {
     public void Choose(GamePlayer player)
     {
-        //player.Selection.Add(player.Hand[Random.Range(0, player.Hand.Count)]);
-        player.Selection.Add(new Card("^"));
+        player.Selection.Add(player.Hand[Random.Range(0, player.Hand.Count)]);
+        //player.Selection.Add(new Card("^"));
     }
 }
 
@@ -252,9 +253,12 @@ public class TreeNode
     public TreeNode(TreeNode parent, int index)
     {
         Parent = parent;
-        Parent.Children.Add(this);
+        if (Parent != null)
+        {
+            Parent.Children.Add(this);
+            Depth = Parent.Depth + 1;
+        }
         Index = index;
-        Depth = Parent.Depth + 1;
     }
 
     public bool IsLeaf { get { return Symbol != null && (Children.Count == 0 || Children.All(cn => cn.Symbol == null)); }}
@@ -345,8 +349,8 @@ public class GamePlayer
         var n12 = new TreeNode(n5, i++);
         var n13 = new TreeNode(n6, i++);
         var n14 = new TreeNode(n6, i++);
-        //var n15 = new TreeNode(n7, i++);
-        Nodes = new List<TreeNode> { n0, n1, n2, n3, n4, n5, n6, n7, n8, n9, n10, n11, n12, n13, n14 };
+        var n15 = new TreeNode(null, i++);
+        Nodes = new List<TreeNode> { n0, n1, n2, n3, n4, n5, n6, n7, n8, n9, n10, n11, n12, n13, n14, n15 };
     }
 
     public TreeNode GetFirstOpenNode()
@@ -673,8 +677,44 @@ public class Game : MonoBehaviour
 
     private void EndTurnPhase(Action next)
     {
+        if (Input.GetKey(KeyCode.Escape))
+        {
+            End("YOU WIN");
+            return;
+        }
         // test win condition here
+        if (Self.Nodes[15].Symbol != null)
+        {
+            // YOU WIN
+            End("YOU WIN");
+            return;
+        }
+        if (Enemy.Nodes[15].Symbol != null)
+        {
+            // YOU LOSE
+            End("YOU LOSE");
+            return;
+        }
         next();
+    }
+
+    public void Replay()
+    {
+        SceneManager.LoadScene("Menu");
+    }
+
+    private void End(string txt)
+    {
+        var end = GameObject.Find("End");
+        var img = end.GetComponent<Image>();
+        var text = end.GetComponentInChildren<Text>();
+        text.text = txt;
+        Tween.FromTo(img, v => img.color = new Color(0, 0, 0, v), 0.0f, 0.7f, 1.5f);
+        Tween.FromTo(text, v => text.rectTransform.anchoredPosition = new Vector2(0, v), -300f, 0f, 2.0f).OnComplete(
+            () =>
+            {
+                end.GetComponent<Button>().interactable = true;
+            });
     }
 
     private void NextPhase()
