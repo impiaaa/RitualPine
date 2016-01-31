@@ -114,10 +114,10 @@ public static class Spell
     {
         return env => 
         {
-            var leaves = env.Enemy.Root.Nodes.Where(n => n.IsLeaf).ToArray();
+            var leaves = env.Enemy.Nodes.Where(n => n.IsLeaf).ToArray();
             if(leaves.Length == 0) { return; }
             var leaf = leaves[Random.Range(0, leaves.Length)];
-            leaf.Destroy();
+            env.Enemy.Destroy(leaf);
         };
     }
 
@@ -188,12 +188,7 @@ public class TreeNode
         Depth = Parent.Depth + 1;
     }
 
-    public void Destroy()
-    {
-        Symbol = null;
-    }
-
-    public bool IsLeaf { get { return Children.Count == 0; }}
+    public bool IsLeaf { get { return Symbol != null && (Children.Count == 0 || Children.All(cn => cn.Symbol == null)); }}
 
     public IEnumerable<TreeNode> Nodes
     {
@@ -297,13 +292,15 @@ public class GamePlayer
         Cursor = Root;
     }
 
-    public Card GetHandCard(string sym)
+    public void Destroy(TreeNode n)
     {
-        for (int i = 0; i < Hand.Count; i++)
+        Debug.Log("Destroying " + n.Index);
+        n.Symbol = null;
+        var t = Tree.Find(n.Index.ToString());
+        for(int i=0;i<t.childCount;i++)
         {
-            if (Hand[i].Symbol == sym) { return Hand[i]; }
+            Object.Destroy(t.GetChild(i).gameObject);
         }
-        return null;
     }
 
     public void Build(Card c)
