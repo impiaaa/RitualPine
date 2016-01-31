@@ -44,8 +44,7 @@ public class Drawer : MonoBehaviour {
 		if (Input.GetMouseButtonUp (0)) {
 			endingPoint = point;
 			char symbol = Recognize();
-            print(symbol);
-            //SendMessageUpwards("SubmitStroke", symbol);
+            SendMessageUpwards("SubmitStroke", symbol);
 			foreach (Transform t in objects) {
 				GameObject.Destroy(t.gameObject);
 			}

@@ -1,6 +1,8 @@
 ﻿using UnityEngine;
 using System.Collections;
 using System.Collections.Generic;
+using UnityEngine.Networking;
+using UnityEngine.Networking.NetworkSystem;
 
 public class PlayerController : MonoBehaviour {
     List<char> spell;
@@ -20,7 +22,10 @@ public class PlayerController : MonoBehaviour {
 
     public void SubmitSpell()
     {
-        print(new string(spell.ToArray()));
+        NetworkClient client = NetworkManager.singleton.client;
+        MessageBase message = new StringMessage(new string(spell.ToArray()));
+        client.Send(1002, message);
+        print("sent message "+message+" to "+client);
         spell.Clear();
     }
 }
