@@ -1,10 +1,9 @@
 ﻿using UnityEngine;
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine.Networking;
 using UnityEngine.Networking.NetworkSystem;
 
-public class ServerBehavior : NetworkBehaviour
+public class ServerBehavior : MonoBehaviour
 {
 	public const short TimerUpdate = 0x544D;
 	public const short PhaseChange = 0x4653;
@@ -18,33 +17,50 @@ public class ServerBehavior : NetworkBehaviour
 	float lastPhaseStartTime;
 	float lastTick;
 	HashSet<int> clientsThatSentMoves;
+    bool gameActive;
 
-	public void Start()
+    void Start()
+    {
+        NetworkServer.RegisterHandler(MakeMove, OnServerMakeMoveMessage);
+        clientsThatSentMoves = new HashSet<int>();
+    }
+
+    public void StartGame()
 	{
-		NetworkServer.RegisterHandler(MakeMove, OnServerMakeMoveMessage);
-		clientsThatSentMoves = new HashSet<int>();
 		lastPhaseStartTime = Time.time;
 		lastTick = Time.time;
-	}
+        gameActive = true;
+        clientsThatSentMoves.Clear();
+    }
+
+    public void StopGame()
+    {
+        gameActive = false;
+    }
 
 	public void Update()
 	{
-		if (Time.time-lastTick > 1) {
-			NetworkServer.SendToAll(TimerUpdate, new FloatMessage(Time.time-lastPhaseStartTime));
-			lastTick = Time.time;
-		}
-		if (Time.time-lastPhaseStartTime >= PhaseDurations[Phase]) {
-			clientsThatSentMoves.Clear();
-			Phase = (Phase+1)%PhaseDurations.Length;
-			NetworkServer.SendToAll(PhaseChange, new IntegerMessage(Phase));
-			lastPhaseStartTime = Time.time;
-			clientsThatSentMoves.Clear();
-		}
+        if (gameActive)
+        {
+            if (Time.time - lastTick > 1)
+            {
+                NetworkServer.SendToAll(TimerUpdate, new FloatMessage(Time.time - lastPhaseStartTime));
+                lastTick = Time.time;
+            }
+            if (Time.time - lastPhaseStartTime >= PhaseDurations[Phase])
+            {
+                clientsThatSentMoves.Clear();
+                Phase = (Phase + 1) % PhaseDurations.Length;
+                NetworkServer.SendToAll(PhaseChange, new IntegerMessage(Phase));
+                lastPhaseStartTime = Time.time;
+                clientsThatSentMoves.Clear();
+            }
+        }
 	}
 
 	void OnServerMakeMoveMessage(NetworkMessage netMsg)
 	{
-		if (!clientsThatSentMoves.Contains(netMsg.conn.connectionId)) {
+		if (gameActive && !clientsThatSentMoves.Contains(netMsg.conn.connectionId)) {
 			var moveMessage = netMsg.ReadMessage<StringMessage>();
 			foreach (var conn in NetworkServer.connections)
 			{
