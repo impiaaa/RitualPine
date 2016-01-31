@@ -4,17 +4,28 @@ using UnityEngine.Networking;
 using UnityEngine.Networking.NetworkSystem;
 
 public class ServerBehavior : NetworkBehaviour {
-    const short MyBeginMsg = 1002;
+    const short PhaseChange = 0x4653;
+    const short MakeMove = 0x4D56;
+
+    private class MoveMessage : MessageBase
+    {
+        public Card card;
+    }
 
     public void Start()
     {
-        NetworkServer.RegisterHandler(MyBeginMsg, OnServerReadyToBeginMessage);
-        print("registered");
+        NetworkServer.RegisterHandler(MakeMove, OnServerMakeMoveMessage);
     }
 
-    void OnServerReadyToBeginMessage(NetworkMessage netMsg)
+    void OnServerMakeMoveMessage(NetworkMessage netMsg)
     {
-        var beginMessage = netMsg.ReadMessage<StringMessage>();
-        Debug.Log("received OnServerReadyToBeginMessage " + beginMessage.value);
+        var moveMessage = netMsg.ReadMessage<MoveMessage>();
+        foreach (var conn in NetworkServer.connections)
+        {
+            if (conn != netMsg.conn)
+            {
+                conn.Send(MakeMove, moveMessage);
+            }
+        }
     }
 }
