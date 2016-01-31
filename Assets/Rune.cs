@@ -26,6 +26,6 @@ public class Rune : MonoBehaviour
 
 	public void Use ()
     {
-        FindObjectOfType<Game>().CastGlyph(_card);
+        FindObjectOfType<Game>().Self.CastGlyph(_card);
 	}
 }

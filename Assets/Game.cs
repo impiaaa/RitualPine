@@ -23,8 +23,8 @@ public class Card
 
     private static Color[] _colors = { 
                                          new Color(1.0f, 0.0f, 0.0f, 1.0f),
-                                         new Color(0.0f, 1.0f, 0.0f, 1.0f),
                                          new Color(0.0f, 0.0f, 1.0f, 1.0f),
+                                         new Color(0.0f, 1.0f, 0.0f, 1.0f),
                                          new Color(1.0f, 0.7f, 0.0f, 1.0f),
                                      };
     public static RuneColor[] _symbolColor = 
@@ -86,6 +86,7 @@ public static class Spell
 
     public static void Cast(Env env, string spell)
     {
+        if (spell.Length > 3) { spell = spell.Substring(spell.Length - 3); }
         var sp = _spells[spell];
         Debug.Log(env.Self.Id + " Cast " + spell);
         sp(env);
@@ -293,7 +294,7 @@ public class GamePlayer
             }
         }
         for (int i = 0; i < Nodes.Count; i++) { if(Nodes[i].Symbol != null) { Nodes[i].Symbol.Active = false; } }
-        Cursor = null;
+        Cursor = Root;
     }
 
     public Card GetHandCard(string sym)
@@ -336,37 +337,26 @@ public class GamePlayer
 
     public void CastGlyph(string str)
     {
+        var sc = Card.GetSymbolColor(str);
+        var tn = Cursor.Children.FirstOrDefault(nc => nc.Symbol != null && nc.Symbol.Color == sc);
+        if (tn != null) { CastGlyph(tn.Symbol); }
+        else { CastGlyph(Hand.FirstOrDefault(h => h.Color == sc)); }
+    }
+
+    public void CastGlyph(Card c)
+    {
+        if (c == null) { return; }
         if (SpellClosed) { return; }
-        var c = Selection.Count == 0 ? GetHandCard(str) : null;
-        if (c != null) { SpellClosed = true; }
-        if (c == null && RootCard != null)
+        var valid = false;
+        if (Hand.Contains(c) && Selection.Count == 0) { SpellClosed = true; valid = true; }
+        else
         {
-            if (Selection.Count == 0)
-            {
-                if (RootCard.Symbol == str)
-                {
-                    Debug.Log("Starting Library Spell");
-                    c = RootCard;
-                    Cursor = Nodes[0];
-                }
-            }
-            else if(Cursor != null)
-            {
-                Debug.Log("Continuing Library Spell "+Cursor.Symbol.Symbol);
-                for (int i = 0; i < Cursor.Children.Count; i++)
-                {
-                    var cc = Cursor.Children[i];
-                    if (cc.Symbol != null && cc.Symbol.Symbol == str) 
-                    { 
-                        c = cc.Symbol;
-                        Cursor = cc;
-                    }
-                }
-            }
+            var tn = Cursor.Children.FirstOrDefault(n => n.Symbol == c);
+            if (tn != null) { Cursor = tn; valid = true; }
         }
-        if (Cursor != null && Cursor.Children.Count == 0) { SpellClosed = true; }
-        if (c != null) 
-        { 
+        if (valid) 
+        {
+            if (Cursor.Children.Count == 0) { SpellClosed = true; }
             Selection.Add(c); 
             c.Active = true;
         }
@@ -421,15 +411,10 @@ public class Game : MonoBehaviour
 
     public void Update()
     {
-        if (Input.GetKeyDown(KeyCode.R)) { CastGlyph("|"); }
-        if (Input.GetKeyDown(KeyCode.B)) { CastGlyph("<"); }
-        if (Input.GetKeyDown(KeyCode.G)) { CastGlyph("^"); }
-        if (Input.GetKeyDown(KeyCode.O)) { CastGlyph("O"); }
-    }
-
-    public void CastGlyph(string str)
-    {
-        Self.CastGlyph(str);
+        if (Input.GetKeyDown(KeyCode.R)) { Self.CastGlyph("|"); }
+        if (Input.GetKeyDown(KeyCode.B)) { Self.CastGlyph("<"); }
+        if (Input.GetKeyDown(KeyCode.G)) { Self.CastGlyph("^"); }
+        if (Input.GetKeyDown(KeyCode.O)) { Self.CastGlyph("O"); }
     }
 
     private void StartTurn(Action next)
