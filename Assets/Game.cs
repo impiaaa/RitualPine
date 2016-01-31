@@ -6,6 +6,7 @@ using System;
 using Random = UnityEngine.Random;
 using Object = UnityEngine.Object;
 using System.Linq;
+using UnityEngine.Networking;
 
 public enum RuneColor
 {
@@ -305,13 +306,20 @@ public class GamePlayer
 
     public void Build(Card c)
     {
-        var prefab = Resources.Load<GameObject>("Card");
-        var ci = Object.Instantiate<GameObject>(prefab);
 
         var n = GetFirstOpenNode();
         var nc = new Card(c.Symbol);
         n.Symbol = nc;
         //Debug.Log("Node ID " + id);
+        UpdateNodeVisual(n);
+    }
+
+    public void UpdateNodeVisual(TreeNode n)
+    {
+        var prefab = Resources.Load<GameObject>("Card");
+        var ci = Object.Instantiate<GameObject>(prefab);
+
+        var nc = n.Symbol;
         ci.transform.SetParent(Tree.Find(n.Index.ToString()));
 
         nc.Active = false;
@@ -374,6 +382,12 @@ public class Env
     public GamePlayer Enemy;
 }
 
+public class NodeMessage : MessageBase
+{
+    public int Index;
+    public string Symbol;
+}
+
 public class Game : MonoBehaviour 
 {
     public Slider Timer;
@@ -389,10 +403,11 @@ public class Game : MonoBehaviour
     public int Phase;
     public Action<Action>[] Phases;
     public AI Computer = new AI();
+    public bool Networked = true;
 
     public void Start()
     {
-        Phase = 0;
+        Phase = -1;
         Self = new GamePlayer("Player");
         Enemy = new GamePlayer("Enemy");
         Self.Tree = SelfTree;
@@ -402,8 +417,8 @@ public class Game : MonoBehaviour
         Self.View = new Env { Self = Self, Enemy = Enemy };
         Enemy.View = new Env { Self = Enemy, Enemy = Self };
 
-        Phases = new Action<Action>[] { StartTurn, StartMove, EndMove, EndTurn };
-        NextPhase();
+        Phases = new Action<Action>[] { StartTurnPhase, StartMovePhase, EndMovePhase, EndTurnPhase };
+        if (!Networked) { OnPhaseChange(0); }
     }
 
     public void Update()
@@ -412,41 +427,70 @@ public class Game : MonoBehaviour
         if (Input.GetKeyDown(KeyCode.B)) { Self.CastGlyph("<"); }
         if (Input.GetKeyDown(KeyCode.G)) { Self.CastGlyph("^"); }
         if (Input.GetKeyDown(KeyCode.O)) { Self.CastGlyph("O"); }
+
+        if (Input.GetKeyDown(KeyCode.Space)) { OnPhaseChange((Phase+1) % Phases.Length); }
     }
 
-    private void StartTurn(Action next)
+    private void StartTurnPhase(Action next)
     {
         Self.Draw();
         Enemy.Draw();
         next();
     }
 
-    private void StartMove(Action next)
+    #region Networking
+    public void OnTimerUpdate(string time)
+    {
+        float f;
+        if (!float.TryParse(time, out f)) { Debug.LogError("Bad Timer Message Format"); return; }
+        Timer.value = f;
+    }
+    public void OnPhaseChange(int phase)
+    {
+        Debug.Log("Phase change " + phase);
+        Phase = phase;
+        var cp = Phases[phase];
+        cp(NextPhase);
+    }
+    public void OnEnemyMove(string spell)
+    {
+        for(int i=0;i<spell.Length;i++)
+        {
+            Enemy.CastGlyph(spell.Substring(i, 1));
+        }
+    }
+    public void OnNodeChange(NodeMessage msg)
+    {
+        var n = Self.Nodes[msg.Index];
+        n.Symbol = new Card(msg.Symbol);
+        Self.UpdateNodeVisual(n);
+    }
+    #endregion
+
+    private void StartMovePhase(Action next)
     {
         Tween.FromTo<float>(Timer, f => Timer.value = f, 1.0f, 0.0f, 4.0f)
             .Curve(null)
             .OnComplete(next);
-        Computer.Choose(Enemy);
+        if (!Networked) { Computer.Choose(Enemy); }
     }
 
-    private void EndMove(Action next)
+    private void EndMovePhase(Action next)
     {
-        //Enemy.ChooseIndex(Random.Range(0, 3));
         Self.DoMove();
-        Enemy.DoMove();
-        
+        Enemy.DoMove(); //Clears
         next();
     }
 
-    private void EndTurn(Action next)
+    private void EndTurnPhase(Action next)
     {
+        // test win condition here
         next();
     }
 
     private void NextPhase()
     {
-        var cp = Phases[Phase++ % Phases.Length];
-        var np = Phases[Phase % Phases.Length];
-        cp(NextPhase);
+        if (Networked) { Debug.Log("Phase done, waiting... "); }
+        else { OnPhaseChange(Phase++ % Phases.Length); }
     }
 }

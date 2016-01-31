@@ -10,6 +10,7 @@ public class PlayerController : MonoBehaviour {
     public Transform strokeSpritePrefab;
     public float spriteSeparation;
     public Sprite[] strokeSprites;
+    public bool SpawnStrokeSprites;
 
 	// Use this for initialization
 	void Start () {
@@ -22,7 +23,10 @@ public class PlayerController : MonoBehaviour {
         if (stroke != ' ')
         {
             spell.Add(stroke);
+            var game = FindObjectOfType<Game>();
+            if (game != null) { game.Self.CastGlyph(new string(new char[] { stroke })); }
             Sprite sprite;
+            if (!SpawnStrokeSprites) { return; }
             switch (stroke)
             {
                 case '^': sprite = strokeSprites[0]; break;
