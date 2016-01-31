@@ -168,7 +168,7 @@ public static class Spell
 
             if (leaf == null) { env.Next(); return; }
             env.Enemy.Destroy(leaf);
-            if (leaf.Parent != null && leaf.Parent.Symbol.Color == RuneColor.Green)
+            if (leaf.Parent != null && leaf.Parent.Symbol != null && leaf.Parent.Symbol.Color == RuneColor.Green)
             {
                 if (Random.value < 0.5f)
                 {
