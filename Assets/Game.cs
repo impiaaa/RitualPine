@@ -60,13 +60,29 @@ public class Card
 
 public static class Spell
 {
+    public static Dictionary<string, Action<Env>> _fast = new Dictionary<string, Action<Env>>
+    {
+        {"b", Counter()},
+        {"bb", Counter()},
+        {"ob", Counter()},
+    };
+
+    public static Dictionary<string, string> _spellText = new Dictionary<string, string>()
+    {
+        {"b", "Reflect"},
+        {"bb", "Force Field"},
+        {"r", "Spark" },
+        {"g", "Growth" },
+        {"o", "Empower" },
+    };
+    
     public static Dictionary<string, Action<Env>> _spells = new Dictionary<string, Action<Env>>
     {
-        { "r", Fire() },  { "b", Counter() },  { "g", Grow() },  { "o", Fire().Repeat(1) },
+        { "r", Fire() },  { "b", Counter() },  { "g", Grow() },  { "o", Boost() },
         { "rr", Fire() },  { "rb", Fire() },  { "rg", Grow() },  { "ro", Fire() },
         { "br", Fire().And(Counter()) },  { "bb", Counter() },  { "bg", Grow() },  { "bo", Fire() },
         { "gr", Fire() },  { "gb", Counter() },  { "gg", Grow() },  { "go", Fire() },
-        { "or", Fire() },  { "ob", Counter() },  { "og", Grow() },  { "oo", Fire() },
+        { "or", Fire().Repeat() },  { "ob", Counter() },  { "og", Grow().Repeat() },  { "oo", Boost() }, /*
         { "rrr", Fire() },  { "rrb", Counter() },  { "rrg", Grow() },  { "rro", Fire() },
         { "rbr", Fire() },  { "rbb", Counter() },  { "rbg", Grow() },  { "rbo", Fire() },
         { "rgr", Fire() },  { "rgb", Counter() },  { "rgg", Grow() },  { "rgo", Fire() },
@@ -82,15 +98,33 @@ public static class Spell
         { "orr", Fire() },  { "orb", Counter() },  { "org", Grow() },  { "oro", Fire() },
         { "obr", Fire() },  { "obb", Counter() },  { "obg", Grow() },  { "obo", Fire() },
         { "ogr", Fire() },  { "ogb", Counter() },  { "ogg", Grow() },  { "ogo", Fire() },
-        { "oor", Fire() },  { "oob", Counter() },  { "oog", Grow() },  { "ooo", Fire() },
+        { "oor", Fire() },  { "oob", Counter() },  { "oog", Grow() },  { "ooo", Fire() }, */
     };
 
-    public static void Cast(Env env, string spell)
+
+    // precast - modifies selections
+
+    public static void Cast(Env env, string spell, bool pre)
     {
-        if (spell.Length > 3) { spell = spell.Substring(spell.Length - 3); }
-        var sp = _spells[spell];
-        Debug.Log(env.Self.Id + " Cast " + spell);
-        sp(env);
+        var lib = pre ? _fast : _spells;
+        while (spell.Length > 0)
+        {
+            for (int k = 3; k >= 1; k--)
+            {
+                if (spell.Length < k) { continue; }
+                var frag = spell.Substring(0, k);
+                if (lib.ContainsKey(frag))
+                {
+                    spell = spell.Substring(k);
+                    var text = _spellText.ContainsKey(frag) ? _spellText[frag] : "";
+                    env.Queue(lib[frag], text, frag.Length);
+                }
+                else if (k == 1)
+                {
+                    spell = "";
+                }
+            }
+        }
     }
 
     public static Action<Env> And(this Action<Env> a, Action<Env> b)
@@ -106,11 +140,18 @@ public static class Spell
         };
     }
 
+    public static Action<Env> Nothing()
+    {
+        return env => env.Next();
+    }
+
     public static Action<Env> Boost(int count = 0)
     {
         return env => 
         {
+            env.Self.Build(new Card("O"));
             AudioBank.PlayGlobal("buzz"); // backlash, raze
+            Tween.Wait(0.5f, env.Next);
         };
     }
 
@@ -118,11 +159,24 @@ public static class Spell
     {
         return env => 
         {
+            env.Self.Build(new Card("|"));
+
             var leaves = env.Enemy.Nodes.Where(n => n.IsLeaf).ToArray();
-            if(leaves.Length == 0) { return; }
+            if(leaves.Length == 0) { env.Next(); return; }
             var leaf = leaves[Random.Range(0, leaves.Length)];
+
+            if (leaf == null) { env.Next(); return; }
             env.Enemy.Destroy(leaf);
+            if (leaf.Parent != null && leaf.Parent.Symbol.Color == RuneColor.Green)
+            {
+                if (Random.value < 0.5f)
+                {
+                    env.Enemy.Destroy(leaf.Parent);
+                }
+            }
+
             AudioBank.PlayGlobal("hit");
+            Tween.Wait(0.5f, env.Next);
         };
     }
 
@@ -130,8 +184,13 @@ public static class Spell
     {
         return env =>
         {
-            env.Self.Build(env.Self.FirstCard);
+            env.Self.Build(new Card("^"));
+            if (Random.value < 0.75f)
+            {
+                env.Self.Build(new Card("^"));
+            }
             AudioBank.PlayGlobal("grow");
+            Tween.Wait(0.5f, env.Next);
         };
         
     }
@@ -140,7 +199,10 @@ public static class Spell
     {
         return env =>
         {
+            env.Enemy.Selection = env.Enemy.Selection.Where(c => c.Color != RuneColor.Red).ToList();
+            env.Self.Build(new Card("<"));
             AudioBank.PlayGlobal("counter");
+            Tween.Wait(0.5f, env.Next);
         };
     }
 }
@@ -169,7 +231,8 @@ public class AI
 {
     public void Choose(GamePlayer player)
     {
-        player.Selection.Add(player.Hand[Random.Range(0, player.Hand.Count)]);
+        //player.Selection.Add(player.Hand[Random.Range(0, player.Hand.Count)]);
+        player.Selection.Add(new Card("^"));
     }
 }
 
@@ -212,6 +275,18 @@ public class TreeNode
     }
 }
 
+public enum NodeAction
+{
+    Build,
+    Destroy,
+}
+
+public class Operation
+{
+    public TreeNode Target;
+    public NodeAction Action;
+}
+
 public class GamePlayer
 {
     public Deck Pool;
@@ -220,6 +295,7 @@ public class GamePlayer
     public TreeNode Cursor;
     public Transform Tree;
     public Transform HandTransform;
+    public RectTransform SpellTray;
     public List<Card> Selection = new List<Card>();
     public bool SpellClosed = false;
     public Env View;
@@ -276,6 +352,12 @@ public class GamePlayer
 
     public void Draw()
     {
+        if (HandTransform != null)
+        {
+            var rt = HandTransform.GetComponent<RectTransform>();
+            rt.anchoredPosition = new Vector2(0, 60);
+        }
+        
         Hand.Clear();
         for (int i = 0; i < Game.HandSize; i++)
         {
@@ -338,28 +420,13 @@ public class GamePlayer
         nc.Rune = ci.GetComponentInChildren<Rune>();
         rt.offsetMax = new Vector2(20f, 30f);
         rt.offsetMin = new Vector2(-20f, -30f);
-        Tween.FromTo<float>(rt, f => rt.localScale = new Vector3(f, f, f), 0.0f, 1.0f, 0.3f);
-    }
-
-    public void DoMove()
-    {
-        if (Selection.Count > 0)
-        {
-            Spell.Cast(View, SelectionSpell);
-            Build(LastCard);
-        }
-        else
-        {
-            AudioBank.PlayGlobal("fail");
-        }
-        Clear();
+        Tween.FromTo<float>(rt, f => rt.localScale = new Vector3(f, f, f), 0.0f, 1.0f, 1.5f);
     }
 
     public void Clear()
     {
         Selection.Clear();
         SpellClosed = false;
-
     }
 
     public void CastGlyph(string str)
@@ -387,6 +454,11 @@ public class GamePlayer
             Selection.Add(c); 
             c.Active = true;
         }
+        if (SpellClosed && HandTransform != null)
+        {
+            var rt = HandTransform.GetComponent<RectTransform>();
+            Tween.FromTo(rt, v => rt.anchoredPosition = v, new Vector2(0, 60), new Vector2(0, -20), 0.5f);
+        }
     }
     
     public string Id;
@@ -398,10 +470,45 @@ public class GamePlayer
     }
 }
 
+public class Move
+{
+    public GamePlayer Caster;
+    public Action<Env> Action;
+    public string Description;
+    public int Glyphs;
+}
+
 public class Env
 {
     public GamePlayer Self;
     public GamePlayer Enemy;
+    public Game Game;
+
+    public Action Done;
+
+    public void Queue(Action<Env> a, string text, int glyphs)
+    {
+        Game.Queue.Add(new Move() { Action=a, Caster=Self, Description=text, Glyphs=glyphs }); 
+    }
+    public void Next()
+    {
+        if (Game.Queue.Count > 0)
+        {
+            var m = Game.Queue[0];
+            Game.Queue.RemoveAt(0);
+            Debug.Log("Running Move "+m.Caster.Id+" "+m.Description);
+            var desc = m.Caster.SpellTray.GetComponentInChildren<Text>();
+            desc.text = m.Description;
+            m.Action(m.Caster.View);
+        }
+        else
+        {
+            if (Done != null)
+            {
+                Done();
+            }
+        }
+    }
 }
 
 public class NodeMessage : MessageBase
@@ -415,11 +522,13 @@ public class Game : MonoBehaviour
     public Slider Timer;
     public static float TurnTime = 4.0f;
     public static int HandSize = 3;
-
+    
     public Transform SelfTree;
     public Transform EnemyTree;
     public Transform SelfHand;
     public Transform EnemyHand;
+    public RectTransform SelfSpell;
+    public RectTransform EnemySpell;
     public GamePlayer Self;
     public GamePlayer Enemy;
     public int Phase;
@@ -434,6 +543,8 @@ public class Game : MonoBehaviour
 		END_TURN_PHASE = 3
 	}
 
+    public List<Move> Queue = new List<Move>();
+
     public void Start()
     {
         Phase = -1;
@@ -443,8 +554,10 @@ public class Game : MonoBehaviour
         Enemy.Tree = EnemyTree;
         Self.HandTransform = SelfHand;
         Enemy.HandTransform = EnemyHand;
-        Self.View = new Env { Self = Self, Enemy = Enemy };
-        Enemy.View = new Env { Self = Enemy, Enemy = Self };
+        Self.SpellTray = SelfSpell;
+        Enemy.SpellTray = EnemySpell;
+        Self.View = new Env { Self = Self, Enemy = Enemy, Game=this };
+        Enemy.View = new Env { Self = Enemy, Enemy = Self, Game=this };
         AudioBank.PlayGlobal("bgm");
 
         Phases = new Action<Action>[] { StartTurnPhase, StartMovePhase, EndMovePhase, EndTurnPhase };
@@ -503,12 +616,28 @@ public class Game : MonoBehaviour
         if (!Networked) { Computer.Choose(Enemy); }
     }
 
+    public void DoMoves(Action onComplete)
+    {
+        Enemy.View.Done = Self.View.Done = onComplete;
+        Spell.Cast(Self.View, Self.SelectionSpell, true);
+        Spell.Cast(Enemy.View, Enemy.SelectionSpell, true);
+        Spell.Cast(Self.View, Self.SelectionSpell, false);
+        Spell.Cast(Enemy.View, Enemy.SelectionSpell, false);
+        Self.View.Next();
+    }
+
     private void EndMovePhase(Action next)
     {
-        Self.DoMove();
-        //Enemy.Clear();
-        Enemy.DoMove();
-        next();
+        if (Self.Selection.Count == 0)
+        {
+            AudioBank.PlayGlobal("fail");
+        }
+        DoMoves(() =>
+        {
+            Self.Clear();
+            Enemy.Clear();
+            next();
+        });
     }
 
     private void EndTurnPhase(Action next)
