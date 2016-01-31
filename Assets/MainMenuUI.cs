@@ -13,24 +13,21 @@ public class MainMenuUI : MonoBehaviour {
     public GameObject joinGameUI;
     public GameObject hostLocalUI;
     public GameObject creditsUI;
-    NetworkMatch networkMatch;
-    NetworkDiscovery networkDiscovery;
+    ServerBehavior net;
 
-    void Awake()
+    void Start()
     {
-        networkMatch = gameObject.AddComponent<NetworkMatch>();
-        networkDiscovery = gameObject.AddComponent<OverriddenNetworkDiscovery>();
-        networkDiscovery.showGUI = false;
-        networkDiscovery.useNetworkManager = false;
-        networkDiscovery.Initialize();
+        net = GameObject.FindGameObjectWithTag("GameController").GetComponent<ServerBehavior>();
+        net.menu = this;
     }
+
     public void HostGameButtonPush()
     {
         if (hostGameUI.activeSelf)
         {
             hostGameUI.SetActive(false);
 
-            StopHosting();
+            net.StopHosting();
         }
         else
         {
@@ -39,7 +36,7 @@ public class MainMenuUI : MonoBehaviour {
             hostLocalUI.SetActive(false);
             creditsUI.SetActive(false);
 
-            BeginHosting();
+            net.BeginHosting();
         }
     }
     public void JoinGameButtonPush()
@@ -48,7 +45,7 @@ public class MainMenuUI : MonoBehaviour {
         {
             joinGameUI.SetActive(false);
 
-            StopListGames();
+            net.StopListGames();
         }
         else
         {
@@ -58,6 +55,7 @@ public class MainMenuUI : MonoBehaviour {
             creditsUI.SetActive(false);
 
             BeginListGames();
+            net.BeginListGames();
         }
     }
     public void HostLocalButtonPush()
@@ -66,7 +64,7 @@ public class MainMenuUI : MonoBehaviour {
         {
             hostLocalUI.SetActive(false);
 
-            StopHostLocal();
+            net.StopHostLocal();
         }
         else
         {
@@ -75,7 +73,7 @@ public class MainMenuUI : MonoBehaviour {
             hostLocalUI.SetActive(true);
             creditsUI.SetActive(false);
 
-            BeginHostLocal();
+            net.BeginHostLocal();
         }
     }
     public void CreditsButtonPush()
@@ -93,117 +91,38 @@ public class MainMenuUI : MonoBehaviour {
         }
     }
 
-    public Text hostLabel;
-    ulong netID;
-
-    void BeginHosting()
-    {
-        CreateMatchRequest create = new CreateMatchRequest();
-        create.name = SystemInfo.deviceName;
-        create.size = 2;
-        create.advertise = true;
-        create.password = "";
-
-        networkMatch.CreateMatch(create, OnMatchCreate);
-        hostLabel.text = "Creating room";
-    }
-
-    void OnMatchCreate(CreateMatchResponse matchResponse)
-    {
-        if (matchResponse.success)
-        {
-            Debug.Log("Create match succeeded");
-            hostLabel.text = "Hosting as \"" + SystemInfo.deviceName + "\" at " + matchResponse.address;
-            netID = (ulong)matchResponse.networkId;
-            Utility.SetAccessTokenForNetwork((NetworkID)netID, new NetworkAccessToken(matchResponse.accessTokenString));
-            NetworkServer.Listen(new MatchInfo(matchResponse), 9000);
-            NetworkServer.RegisterHandler(MsgType.Connect, (NetworkMessage netMsg) => {
-                print("OnConnected");
-                SceneManager.LoadScene("main");
-                GameObject.Find("Global").GetComponent<Game>().Networked = true;
-                NetworkClient myClient = new NetworkClient();
-                //myClient.RegisterHandler(MsgType.Connect, OnConnected);
-                myClient.Connect(new MatchInfo(matchResponse));
-            });
-        }
-        else
-        {
-            Debug.LogError("Create match failed");
-            hostLabel.text = "Failed to open room";
-        }
-    }
-
-    void StopHosting()
-    {
-        networkMatch.DestroyMatch((NetworkID)netID, null);
-        hostLabel.text = "";
-    }
-
     public GameObject joinButtonPrefab;
     List<GameObject> joinGameButtons = new List<GameObject>();
     int joinListY;
-    int LOCAL_PORT = 0x5254554c;
 
     void BeginListGames()
     {
-        networkMatch.ListMatches(0, 20, "", OnMatchList);
-        networkDiscovery.StartAsClient();
         joinListY = 60;
     }
 
-    public void OnMatchList(ListMatchResponse matchListResponse)
+    public void OnMatchList(ListMatchResponse matchListResponse, NetworkMatch networkMatch, NetworkMatch.ResponseDelegate<JoinMatchResponse> OnMatchJoined)
     {
-        if (matchListResponse.success && matchListResponse.matches != null)
+        foreach (MatchDesc md in matchListResponse.matches)
         {
-            foreach (MatchDesc md in matchListResponse.matches)
-            {
-                GameObject newButton = GameObject.Instantiate(joinButtonPrefab);
-                newButton.transform.parent = joinGameUI.transform;
-                newButton.transform.localPosition = new Vector2(newButton.transform.position.x, joinListY);
-                newButton.GetComponentInChildren<Text>().text = md.name;
-                newButton.GetComponent<Button>().onClick.AddListener(() => {
-                    networkMatch.JoinMatch(md.networkId, "", OnMatchJoined);
-                });
-                joinListY -= 20;
-                joinGameButtons.Add(newButton);
-            }
+            GameObject newButton = GameObject.Instantiate(joinButtonPrefab);
+            newButton.transform.parent = joinGameUI.transform;
+            newButton.transform.localPosition = new Vector2(newButton.transform.position.x, joinListY);
+            newButton.GetComponentInChildren<Text>().text = md.name;
+            newButton.GetComponent<Button>().onClick.AddListener(() => {
+                networkMatch.JoinMatch(md.networkId, "", OnMatchJoined);
+            });
+            joinListY -= 20;
+            joinGameButtons.Add(newButton);
         }
     }
 
-    public void OnMatchJoined(JoinMatchResponse matchJoin)
-    {
-        if (matchJoin.success)
-        {
-            Debug.Log("Join match succeeded");
-            Utility.SetAccessTokenForNetwork(matchJoin.networkId, new NetworkAccessToken(matchJoin.accessTokenString));
-            SceneManager.LoadScene("main");
-            GameObject.Find("Global").GetComponent<Game>().Networked = true;
-            NetworkClient myClient = new NetworkClient();
-            //myClient.RegisterHandler(MsgType.Connect, OnConnected);
-            myClient.Connect(new MatchInfo(matchJoin));
-        }
-        else
-        {
-            Debug.LogError("Join match failed");
-        }
-    }
-
-    void StopListGames()
+    public void StopListGames()
     {
         foreach (GameObject but in joinGameButtons)
         {
             GameObject.Destroy(but);
         }
         joinGameButtons.Clear();
-        networkDiscovery.StopBroadcast();
-    }
-
-    public class OverriddenNetworkDiscovery : NetworkDiscovery
-    {
-        public override void OnReceivedBroadcast(string fromAddress, string data)
-        {
-            GetComponent<MainMenuUI>().OnReceivedBroadcast(fromAddress, data);
-        }
     }
 
     public void OnReceivedBroadcast(string fromAddress, string data)
@@ -224,22 +143,14 @@ public class MainMenuUI : MonoBehaviour {
             SceneManager.LoadScene("main");
             GameObject.Find("Global").GetComponent<Game>().Networked = true;
             NetworkClient myClient = new NetworkClient();
-            myClient.Connect(fromAddress, LOCAL_PORT);
+            myClient.Connect(fromAddress, net.LOCAL_PORT);
         });
         joinListY -= 50;
         joinGameButtons.Add(newButton);
     }
 
-    public Text hostLabelLocal;
-    void BeginHostLocal()
+    public void DoSinglePlayer()
     {
-        networkDiscovery.broadcastData = SystemInfo.deviceName;
-        networkDiscovery.StartAsServer();
-        hostLabelLocal.text = "Broadcasting as " + networkDiscovery.broadcastData;
-    }
-
-    void StopHostLocal()
-    {
-        networkDiscovery.StopBroadcast();
+        SceneManager.LoadScene("main");
     }
 }
