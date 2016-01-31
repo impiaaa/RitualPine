@@ -34,51 +34,107 @@ public class Card
                                         RuneColor.Green, RuneColor.Green, 
                                         RuneColor.Orange, RuneColor.Orange
                                     };
-    public static Color GetColor (RuneColor rc) { return _colors[(int)rc]; }
-    public static string GetColorName (RuneColor rc) { return new string(new char[] { Colors[(int)rc]} ); }
+    public static Color GetColor(string sym) { return GetColor(GetSymbolColor(sym)); }
+    public static Color GetColor(RuneColor rc) { return _colors[(int)rc]; }
+    public static string GetColorName(RuneColor rc) { return new string(new char[] { Colors[(int)rc] }); }
+    public static RuneColor GetSymbolColor(string sym) {
+        return _symbolColor[Symbols.IndexOf(sym)];
+    }
 
     public string Symbol;
     public RuneColor Color;
+
+    private Rune _rune;
+    public Rune Rune { get { return _rune; } set { _rune = value; if (_rune != null) { _rune.SetGlyph(this); _rune.Selected = _active; } } }
+    private bool _active;
+    public bool Active { get { return _active; } set { _active = value; if (_rune != null) { _rune.Selected = _active; } } }
     public Card(string sym)
     {
         Symbol = sym;
         Color = _symbolColor[Symbols.IndexOf(sym)];
     }
+
+
 }
 
 public static class Spell
 {
-    public static Dictionary<string, Action<Game>> _spells = new Dictionary<string, Action<Game>>
+    public static Dictionary<string, Action<Env>> _spells = new Dictionary<string, Action<Env>>
     {
-        { "r", Fire },
-        { "b", Counter },
-        { "g", Grow },
-        { "og", BoostGrow },
-        { "ooog", BoostGrow },
+        { "r", Fire() },  { "b", Counter() },  { "g", Grow() },  { "o", Fire().Repeat(1) },
+        { "rr", Fire() },  { "rb", Fire() },  { "rg", Grow() },  { "ro", Fire() },
+        { "br", Fire().And(Counter()) },  { "bb", Counter() },  { "bg", Grow() },  { "bo", Fire() },
+        { "gr", Fire() },  { "gb", Counter() },  { "gg", Grow() },  { "go", Fire() },
+        { "or", Fire() },  { "ob", Counter() },  { "og", Grow() },  { "oo", Fire() },
+        { "rrr", Fire() },  { "rrb", Counter() },  { "rrg", Grow() },  { "rro", Fire() },
+        { "rbr", Fire() },  { "rbb", Counter() },  { "rbg", Grow() },  { "rbo", Fire() },
+        { "rgr", Fire() },  { "rgb", Counter() },  { "rgg", Grow() },  { "rgo", Fire() },
+        { "ror", Fire() },  { "rob", Counter() },  { "rog", Grow() },  { "roo", Fire() },
+        { "brr", Fire() },  { "brb", Counter() },  { "brg", Grow() },  { "bro", Fire() },
+        { "bbr", Fire() },  { "bbb", Counter() },  { "bbg", Grow() },  { "bbo", Fire() },
+        { "bgr", Fire() },  { "bgb", Counter() },  { "bgg", Grow() },  { "bgo", Fire() },
+        { "bor", Fire() },  { "bob", Counter() },  { "bog", Grow() },  { "boo", Fire() },
+        { "grr", Fire() },  { "grb", Counter() },  { "grg", Grow() },  { "gro", Fire() },
+        { "gbr", Fire() },  { "gbb", Counter() },  { "gbg", Grow() },  { "gbo", Fire() },
+        { "ggr", Fire() },  { "ggb", Counter() },  { "ggg", Grow() },  { "ggo", Fire() },
+        { "gor", Fire() },  { "gob", Counter() },  { "gog", Grow() },  { "goo", Fire() },
+        { "orr", Fire() },  { "orb", Counter() },  { "org", Grow() },  { "oro", Fire() },
+        { "obr", Fire() },  { "obb", Counter() },  { "obg", Grow() },  { "obo", Fire() },
+        { "ogr", Fire() },  { "ogb", Counter() },  { "ogg", Grow() },  { "ogo", Fire() },
+        { "oor", Fire() },  { "oob", Counter() },  { "oog", Grow() },  { "ooo", Fire() },
     };
 
-    public static void Fire(Game game)
+    public static void Cast(Env env, string spell)
     {
-        var leaves = game.Enemy.Root.Nodes.Where(n => n.IsLeaf).ToArray();
-        if(leaves.Length == 0) { return; }
-        var leaf = leaves[Random.Range(0, leaves.Length)];
-        leaf.Destroy();
+        var sp = _spells[spell];
+        Debug.Log(env.Self.Id + " Cast " + spell);
+        sp(env);
     }
 
-    public static void Grow(Game game)
+    public static Action<Env> And(this Action<Env> a, Action<Env> b)
     {
-        //game.Self.Root.Grow(new Card(game.Self.Selection.Symbol));
+        return env => { a(env); b(env); };
     }
 
-    public static void Counter(Game game)
+    public static Action<Env> Repeat(this Action<Env> a, int count = 1)
     {
-
+        return env =>
+        {
+            for (int i = 0; i < count; i++) { a(env); }
+        };
     }
 
-    public static void BoostGrow(Game game)
+    public static Action<Env> Boost(int count = 0)
     {
-        Grow(game);
-        Grow(game);
+        return g => { };
+    }
+
+    public static Action<Env> Fire()
+    {
+        return env => 
+        {
+            var leaves = env.Enemy.Root.Nodes.Where(n => n.IsLeaf).ToArray();
+            if(leaves.Length == 0) { return; }
+            var leaf = leaves[Random.Range(0, leaves.Length)];
+            leaf.Destroy();
+        };
+    }
+
+    public static Action<Env> Grow()
+    {
+        return env =>
+        {
+            env.Self.Build(env.Self.FirstCard);
+        };
+        
+    }
+
+    public static Action<Env> Counter()
+    {
+        return env =>
+        {
+            
+        };
     }
 }
 
@@ -106,7 +162,7 @@ public class AI
 {
     public void Choose(GamePlayer player)
     {
-        player.Selection = player.Hand[Random.Range(0, player.Hand.Count)];
+        player.Selection.Add(player.Hand[Random.Range(0, player.Hand.Count)]);
     }
 }
 
@@ -133,8 +189,7 @@ public class TreeNode
 
     public void Destroy()
     {
-        if (Parent == null) { return; }
-        Parent.Children.Remove(this);
+        Symbol = null;
     }
 
     public bool IsLeaf { get { return Children.Count == 0; }}
@@ -162,12 +217,30 @@ public class GamePlayer
     public TreeNode Root;
     public TreeNode Cursor;
     public Transform Tree;
-    public Card Selection;
+    public Transform HandTransform;
+    public List<Card> Selection = new List<Card>();
+    public bool SpellClosed = false;
+    public Env View;
 
     public Card RootCard { get { return Nodes.Count > 0 ? Nodes[0].Symbol : null; } }
+    public Card FirstCard { get { return Selection.Count > 0 ? Selection[0] : null; } }
+    public Card LastCard { get { return Selection.Count > 0 ? Selection[Selection.Count-1] : null; } }
 
     public List<TreeNode> Nodes;
 
+    public string SelectionSpell 
+    {
+        get 
+        {
+            string sp = "";
+            for(int i=0;i<Selection.Count;i++)
+            {
+                sp += Card.GetColorName(Selection[i].Color);
+            }
+            return sp;
+        }
+    }
+    
     private void CreateTree()
     {
         Root = new TreeNode();
@@ -215,11 +288,12 @@ public class GamePlayer
             Hand.Add(c);
             if(Id == "Player")
             {
-                var cui = GameObject.Find(string.Format("Card{0}", Hand.Count));
-                var cuit = cui.transform.FindChild("Text").GetComponent<Text>();
-                cuit.text = c.Symbol;
+                var cui = HandTransform.GetChild(i);
+                c.Rune = cui.GetComponent<Rune>();
             }
         }
+        for (int i = 0; i < Nodes.Count; i++) { if(Nodes[i].Symbol != null) { Nodes[i].Symbol.Active = false; } }
+        Cursor = null;
     }
 
     public Card GetHandCard(string sym)
@@ -231,40 +305,73 @@ public class GamePlayer
         return null;
     }
 
-    public void ChooseIndex(int i)
-    {
-        // TODO: turn to spell
-        Selection = Hand[i];
-        Debug.Log("Selected " + i+ " "+Selection.Symbol);
-    }
-
     public void Build(Card c)
     {
         var prefab = Resources.Load<GameObject>("Card");
         var ci = Object.Instantiate<GameObject>(prefab);
 
         var n = GetFirstOpenNode();
-        n.Symbol = c;
+        var nc = new Card(c.Symbol);
+        n.Symbol = nc;
         //Debug.Log("Node ID " + id);
         ci.transform.SetParent(Tree.Find(n.Index.ToString()));
 
+        nc.Active = false;
         var rt = ci.GetComponent<RectTransform>();
-        var cit = ci.GetComponentInChildren<Text>();
-        cit.text = c.Symbol;
+        nc.Rune = ci.GetComponentInChildren<Rune>();
         rt.offsetMax = new Vector2(20f, 30f);
         rt.offsetMin = new Vector2(-20f, -30f);
     }
 
     public void DoMove()
     {
-        if (Selection != null)
+        if (Selection.Count > 0)
         {
-            Debug.Log(Id + " Cast " + Selection.Symbol);
-            Build(Selection);
+            Spell.Cast(View, SelectionSpell);
+            Build(LastCard);
         }
-        Selection = null;
+        Selection.Clear();
+        SpellClosed = false;
     }
 
+    public void CastGlyph(string str)
+    {
+        if (SpellClosed) { return; }
+        var c = Selection.Count == 0 ? GetHandCard(str) : null;
+        if (c != null) { SpellClosed = true; }
+        if (c == null && RootCard != null)
+        {
+            if (Selection.Count == 0)
+            {
+                if (RootCard.Symbol == str)
+                {
+                    Debug.Log("Starting Library Spell");
+                    c = RootCard;
+                    Cursor = Nodes[0];
+                }
+            }
+            else if(Cursor != null)
+            {
+                Debug.Log("Continuing Library Spell "+Cursor.Symbol.Symbol);
+                for (int i = 0; i < Cursor.Children.Count; i++)
+                {
+                    var cc = Cursor.Children[i];
+                    if (cc.Symbol != null && cc.Symbol.Symbol == str) 
+                    { 
+                        c = cc.Symbol;
+                        Cursor = cc;
+                    }
+                }
+            }
+        }
+        if (Cursor != null && Cursor.Children.Count == 0) { SpellClosed = true; }
+        if (c != null) 
+        { 
+            Selection.Add(c); 
+            c.Active = true;
+        }
+    }
+    
     public string Id;
     public GamePlayer(string id)
     {
@@ -272,6 +379,12 @@ public class GamePlayer
         Pool = new Deck(250);
         CreateTree();
     }
+}
+
+public class Env
+{
+    public GamePlayer Self;
+    public GamePlayer Enemy;
 }
 
 public class Game : MonoBehaviour 
@@ -282,6 +395,8 @@ public class Game : MonoBehaviour
 
     public Transform SelfTree;
     public Transform EnemyTree;
+    public Transform SelfHand;
+    public Transform EnemyHand;
     public GamePlayer Self;
     public GamePlayer Enemy;
     public int Phase;
@@ -295,20 +410,26 @@ public class Game : MonoBehaviour
         Enemy = new GamePlayer("Enemy");
         Self.Tree = SelfTree;
         Enemy.Tree = EnemyTree;
+        Self.HandTransform = SelfHand;
+        Enemy.HandTransform = EnemyHand;
+        Self.View = new Env { Self = Self, Enemy = Enemy };
+        Enemy.View = new Env { Self = Enemy, Enemy = Self };
+
         Phases = new Action<Action>[] { StartTurn, StartMove, EndMove, EndTurn };
         NextPhase();
     }
 
     public void Update()
     {
-        if (Input.GetKeyDown(KeyCode.A)) { ChooseIndex(0); }
-        if (Input.GetKeyDown(KeyCode.S)) { ChooseIndex(1); }
-        if (Input.GetKeyDown(KeyCode.D)) { ChooseIndex(2); }
+        if (Input.GetKeyDown(KeyCode.R)) { CastGlyph("|"); }
+        if (Input.GetKeyDown(KeyCode.B)) { CastGlyph("<"); }
+        if (Input.GetKeyDown(KeyCode.G)) { CastGlyph("^"); }
+        if (Input.GetKeyDown(KeyCode.O)) { CastGlyph("O"); }
     }
 
-    public void ChooseIndex(int i)
+    public void CastGlyph(string str)
     {
-        Self.ChooseIndex(i);
+        Self.CastGlyph(str);
     }
 
     private void StartTurn(Action next)
