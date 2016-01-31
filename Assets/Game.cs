@@ -297,7 +297,11 @@ public class GamePlayer
     public Transform HandTransform;
     public RectTransform SpellTray;
     public List<Card> Selection = new List<Card>();
-    public bool SpellClosed = false;
+    private bool _spellClosed = false;
+
+    public bool SpellClosed { get { return _spellClosed; } set { _spellClosed = value;
+        OnSpellClosed();
+    } }
     public Env View;
 
     public Card RootCard { get { return Nodes.Count > 0 ? Nodes[0].Symbol : null; } }
@@ -324,12 +328,15 @@ public class GamePlayer
         Root = new TreeNode();
         int i=0;
         var n0 = new TreeNode(Root, i++);
+        
         var n1 = new TreeNode(n0, i++);
         var n2 = new TreeNode(n0, i++);
+        
         var n3 = new TreeNode(n1, i++);
         var n4 = new TreeNode(n1, i++);
         var n5 = new TreeNode(n2, i++);
         var n6 = new TreeNode(n2, i++);
+        
         var n7 = new TreeNode(n3, i++);
         var n8 = new TreeNode(n3, i++);
         var n9 = new TreeNode(n4, i++);
@@ -338,6 +345,7 @@ public class GamePlayer
         var n12 = new TreeNode(n5, i++);
         var n13 = new TreeNode(n6, i++);
         var n14 = new TreeNode(n6, i++);
+        //var n15 = new TreeNode(n7, i++);
         Nodes = new List<TreeNode> { n0, n1, n2, n3, n4, n5, n6, n7, n8, n9, n10, n11, n12, n13, n14 };
     }
 
@@ -418,8 +426,8 @@ public class GamePlayer
         nc.Active = false;
         var rt = ci.GetComponent<RectTransform>();
         nc.Rune = ci.GetComponentInChildren<Rune>();
-        rt.offsetMax = new Vector2(20f, 30f);
-        rt.offsetMin = new Vector2(-20f, -30f);
+        rt.offsetMax = new Vector2(10f, 10f);
+        rt.offsetMin = new Vector2(-10f, -10f);
         Tween.FromTo<float>(rt, f => rt.localScale = new Vector3(f, f, f), 0.0f, 1.0f, 1.5f);
     }
 
@@ -427,6 +435,7 @@ public class GamePlayer
     {
         Selection.Clear();
         SpellClosed = false;
+        HideTray();
     }
 
     public void CastGlyph(string str)
@@ -450,15 +459,31 @@ public class GamePlayer
         }
         if (valid) 
         {
-            if (Cursor.Children.Count == 0) { SpellClosed = true; }
+            if (Cursor.Children.Count(tn => tn.Symbol != null) == 0) { SpellClosed = true; }
             Selection.Add(c); 
             c.Active = true;
         }
-        if (SpellClosed && HandTransform != null)
+    }
+    
+    public void OnSpellClosed()
+    {
+        if (!SpellClosed) { return; }
+        if (HandTransform != null)
         {
             var rt = HandTransform.GetComponent<RectTransform>();
             Tween.FromTo(rt, v => rt.anchoredPosition = v, new Vector2(0, 60), new Vector2(0, -20), 0.5f);
         }
+    }
+
+    public void HideTray()
+    {
+        var s = Math.Sign(SpellTray.anchoredPosition.y);
+        Tween.FromTo(SpellTray, v => SpellTray.anchoredPosition = v, new Vector2(0, 217*s), new Vector2(0, 300*s), 0.5f);
+    }
+    public void ShowTray()
+    {
+        var s = Math.Sign(SpellTray.anchoredPosition.y);
+        Tween.FromTo(SpellTray, v => SpellTray.anchoredPosition = v, new Vector2(0, 300 * s), new Vector2(0, 217 * s), 0.5f);
     }
     
     public string Id;
@@ -610,7 +635,10 @@ public class Game : MonoBehaviour
 
     private void StartMovePhase(Action next)
     {
-        Tween.FromTo<float>(Timer, f => Timer.value = f, 1.0f, 0.0f, 4.0f)
+        Enemy.HideTray();
+        Self.HideTray();
+
+        Tween.FromTo<float>(Timer, f => Timer.value = f, 1.0f, 0.0f, 6.0f)
             .Curve(null)
             .OnComplete(next);
         if (!Networked) { Computer.Choose(Enemy); }
@@ -618,6 +646,8 @@ public class Game : MonoBehaviour
 
     public void DoMoves(Action onComplete)
     {
+        Enemy.ShowTray();
+        Self.ShowTray();
         Enemy.View.Done = Self.View.Done = onComplete;
         Spell.Cast(Self.View, Self.SelectionSpell, true);
         Spell.Cast(Enemy.View, Enemy.SelectionSpell, true);
@@ -628,12 +658,13 @@ public class Game : MonoBehaviour
 
     private void EndMovePhase(Action next)
     {
-        if (Self.Selection.Count == 0)
+        if (Self.Selection.Count == 0 || !Self.SpellClosed)
         {
             AudioBank.PlayGlobal("fail");
         }
         DoMoves(() =>
         {
+            Debug.Log("Done Moves");
             Self.Clear();
             Enemy.Clear();
             next();
