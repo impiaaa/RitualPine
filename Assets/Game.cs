@@ -108,7 +108,10 @@ public static class Spell
 
     public static Action<Env> Boost(int count = 0)
     {
-        return g => { };
+        return env => 
+        {
+            AudioBank.PlayGlobal("buzz"); // backlash, raze
+        };
     }
 
     public static Action<Env> Fire()
@@ -119,6 +122,7 @@ public static class Spell
             if(leaves.Length == 0) { return; }
             var leaf = leaves[Random.Range(0, leaves.Length)];
             env.Enemy.Destroy(leaf);
+            AudioBank.PlayGlobal("hit");
         };
     }
 
@@ -127,6 +131,7 @@ public static class Spell
         return env =>
         {
             env.Self.Build(env.Self.FirstCard);
+            AudioBank.PlayGlobal("grow");
         };
         
     }
@@ -135,7 +140,7 @@ public static class Spell
     {
         return env =>
         {
-            
+            AudioBank.PlayGlobal("counter");
         };
     }
 }
@@ -300,7 +305,12 @@ public class GamePlayer
         var t = Tree.Find(n.Index.ToString());
         for(int i=0;i<t.childCount;i++)
         {
-            Object.Destroy(t.GetChild(i).gameObject);
+            var ti = t.GetChild(i);
+            Tween.FromTo<float>(ti, f => ti.localEulerAngles = new Vector3(0, 0, f * 45f), 0f, 5f, 1f);
+            Tween.FromTo<float>(ti, f => ti.localScale = new Vector3(f, f, f), 1f, 0f, 1f).OnComplete(() =>
+            {
+                Object.Destroy(ti.gameObject);
+            });
         }
     }
 
@@ -308,6 +318,7 @@ public class GamePlayer
     {
 
         var n = GetFirstOpenNode();
+        if (n == null) { return; }
         var nc = new Card(c.Symbol);
         n.Symbol = nc;
         //Debug.Log("Node ID " + id);
@@ -327,6 +338,7 @@ public class GamePlayer
         nc.Rune = ci.GetComponentInChildren<Rune>();
         rt.offsetMax = new Vector2(20f, 30f);
         rt.offsetMin = new Vector2(-20f, -30f);
+        Tween.FromTo<float>(rt, f => rt.localScale = new Vector3(f, f, f), 0.0f, 1.0f, 0.3f);
     }
 
     public void DoMove()
@@ -336,8 +348,18 @@ public class GamePlayer
             Spell.Cast(View, SelectionSpell);
             Build(LastCard);
         }
+        else
+        {
+            AudioBank.PlayGlobal("fail");
+        }
+        Clear();
+    }
+
+    public void Clear()
+    {
         Selection.Clear();
         SpellClosed = false;
+
     }
 
     public void CastGlyph(string str)
@@ -423,6 +445,7 @@ public class Game : MonoBehaviour
         Enemy.HandTransform = EnemyHand;
         Self.View = new Env { Self = Self, Enemy = Enemy };
         Enemy.View = new Env { Self = Enemy, Enemy = Self };
+        AudioBank.PlayGlobal("bgm");
 
         Phases = new Action<Action>[] { StartTurnPhase, StartMovePhase, EndMovePhase, EndTurnPhase };
         if (!Networked) { OnPhaseChange(0); }
@@ -453,8 +476,8 @@ public class Game : MonoBehaviour
     public void OnPhaseChange(int phase)
     {
         Debug.Log("Phase change " + phase);
-        Phase = phase;
-        var cp = Phases[phase];
+        Phase = phase % Phases.Length;
+        var cp = Phases[Phase];
         cp(NextPhase);
     }
     public void OnEnemyMove(string spell)
@@ -483,7 +506,8 @@ public class Game : MonoBehaviour
     private void EndMovePhase(Action next)
     {
         Self.DoMove();
-        Enemy.DoMove(); //Clears
+        //Enemy.Clear();
+        Enemy.DoMove();
         next();
     }
 
@@ -496,6 +520,6 @@ public class Game : MonoBehaviour
     private void NextPhase()
     {
         if (Networked) { Debug.Log("Phase done, waiting... "); }
-        else { OnPhaseChange(Phase++ % Phases.Length); }
+        else { OnPhaseChange(Phase+1 % Phases.Length); }
     }
 }

@@ -4,12 +4,13 @@ using System.Collections.Generic;
 using FableLabs.Util;
 using UnityEngine;
 
+public interface IIdentifiable
+{
+    string GetId();
+}
+
 namespace FableLabs.Anim
 {
-    public interface IIdentifiable
-    {
-        string GetId();
-    }
 
     public abstract class BaseTween : IDisposable, IIdentifiable
     {
