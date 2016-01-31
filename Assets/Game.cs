@@ -405,6 +405,13 @@ public class Game : MonoBehaviour
     public AI Computer = new AI();
     public bool Networked = true;
 
+	public enum PhaseNames {
+		START_TURN_PHASE = 0,
+		START_MOVE_PHASE = 1,
+		END_MOVE_PHASE = 2,
+		END_TURN_PHASE = 3
+	}
+
     public void Start()
     {
         Phase = -1;
@@ -439,11 +446,9 @@ public class Game : MonoBehaviour
     }
 
     #region Networking
-    public void OnTimerUpdate(string time)
+    public void OnTimerUpdate(float time)
     {
-        float f;
-        if (!float.TryParse(time, out f)) { Debug.LogError("Bad Timer Message Format"); return; }
-        Timer.value = f;
+        Timer.value = time;
     }
     public void OnPhaseChange(int phase)
     {

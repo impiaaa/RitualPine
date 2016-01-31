@@ -1,31 +1,59 @@
 ﻿using UnityEngine;
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine.Networking;
 using UnityEngine.Networking.NetworkSystem;
 
-public class ServerBehavior : NetworkBehaviour {
-    const short PhaseChange = 0x4653;
-    const short MakeMove = 0x4D56;
+public class ServerBehavior : NetworkBehaviour
+{
+	public const short TimerUpdate = 0x544D;
+	public const short PhaseChange = 0x4653;
+	public const short MakeMove = 0x4D56;
+	public const short NodeChange = 0x4E44;
 
-    private class MoveMessage : MessageBase
-    {
-        public Card card;
-    }
+	public float[] PhaseDurations = {4.0f, 4.0f, 4.0f, 4.0f};
 
-    public void Start()
-    {
-        NetworkServer.RegisterHandler(MakeMove, OnServerMakeMoveMessage);
-    }
+	int Phase;
 
-    void OnServerMakeMoveMessage(NetworkMessage netMsg)
-    {
-        var moveMessage = netMsg.ReadMessage<MoveMessage>();
-        foreach (var conn in NetworkServer.connections)
-        {
-            if (conn != netMsg.conn)
-            {
-                conn.Send(MakeMove, moveMessage);
-            }
-        }
-    }
+	float lastPhaseStartTime;
+	float lastTick;
+	HashSet<int> clientsThatSentMoves;
+
+	public void Start()
+	{
+		NetworkServer.RegisterHandler(MakeMove, OnServerMakeMoveMessage);
+		clientsThatSentMoves = new HashSet<int>();
+		lastPhaseStartTime = Time.time;
+		lastTick = Time.time;
+	}
+
+	public void Update()
+	{
+		if (Time.time-lastTick > 1) {
+			NetworkServer.SendToAll(TimerUpdate, new FloatMessage(Time.time-lastPhaseStartTime));
+			lastTick = Time.time;
+		}
+		if (Time.time-lastPhaseStartTime >= PhaseDurations[Phase]) {
+			clientsThatSentMoves.Clear();
+			Phase = (Phase+1)%PhaseDurations.Length;
+			NetworkServer.SendToAll(PhaseChange, new IntegerMessage(Phase));
+			lastPhaseStartTime = Time.time;
+			clientsThatSentMoves.Clear();
+		}
+	}
+
+	void OnServerMakeMoveMessage(NetworkMessage netMsg)
+	{
+		if (!clientsThatSentMoves.Contains(netMsg.conn.connectionId)) {
+			var moveMessage = netMsg.ReadMessage<StringMessage>();
+			foreach (var conn in NetworkServer.connections)
+			{
+				if (conn != netMsg.conn)
+				{
+					conn.Send(MakeMove, moveMessage);
+				}
+			}
+			clientsThatSentMoves.Add(netMsg.conn.connectionId);
+		}
+	}
 }
