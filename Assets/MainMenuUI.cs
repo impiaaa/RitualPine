@@ -13,12 +13,19 @@ public class MainMenuUI : MonoBehaviour {
     public GameObject joinGameUI;
     public GameObject hostLocalUI;
     public GameObject creditsUI;
+    public Slider slider;
     ServerBehavior net;
 
     void Start()
     {
-        net = GameObject.FindGameObjectWithTag("GameController").GetComponent<ServerBehavior>();
-        net.menu = this;
+        //net = GameObject.FindGameObjectWithTag("GameController").GetComponent<ServerBehavior>();
+        //net.menu = this;
+
+        if (PlayerPrefs.GetFloat("EmissionRateMultiple", -1) < 0)
+        {
+            PlayerPrefs.SetFloat("EmissionRateMultiple", 1);
+        }
+        slider.value = PlayerPrefs.GetFloat("EmissionRateMultiple");
     }
 
     public void HostGameButtonPush()
@@ -151,6 +158,12 @@ public class MainMenuUI : MonoBehaviour {
 
     public void DoSinglePlayer()
     {
+        PlayerPrefs.Save();
         SceneManager.LoadScene("main");
+    }
+
+    public void ParticleRateChanged()
+    {
+        PlayerPrefs.SetFloat("EmissionRateMultiple", slider.value);
     }
 }
