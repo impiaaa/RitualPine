@@ -397,9 +397,13 @@ public class GamePlayer
         Debug.Log("Destroying " + n.Index);
         n.Symbol = null;
         var t = Tree.Find(n.Index.ToString());
+        var fire = Resources.Load<GameObject>("Fire");
         for(int i=0;i<t.childCount;i++)
         {
             var ti = t.GetChild(i);
+            var fi = Object.Instantiate<GameObject>(fire);
+            fi.transform.position = ti.transform.position;
+            
             Tween.FromTo<float>(ti, f => ti.localEulerAngles = new Vector3(0, 0, f * 45f), 0f, 5f, 1f);
             Tween.FromTo<float>(ti, f => ti.localScale = new Vector3(f, f, f), 1f, 0f, 1f).OnComplete(() =>
             {
